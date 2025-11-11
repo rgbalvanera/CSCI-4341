@@ -135,12 +135,21 @@ function onPieceClick(p){
 			enemies.forEach(e=>state.board[e.r*COLS+e.c].el.classList.add('highlight-attack'));
 			el.actionDesc.textContent = `Move up to ${state.dice} and optionally attack`;
 		} else if(state.dice===4 || state.dice===5){
-			// attack-only with multiplier
+			// move up to 1 tile and attack with multiplier
 			const mult = state.dice===4?2:3;
 			state.diceMultiplier = mult;
-			const enemies = getEnemiesInAttackRange(p, p.r, p.c, /*allowLong*/true);
-			enemies.forEach(e=>state.board[e.r*COLS+e.c].el.classList.add('highlight-attack'));
-			el.actionDesc.textContent = `Attack with ${mult}x damage - choose target`;
+			// highlight reachable tiles (up to 1)
+			const tiles = getReachable(p, 1);
+			tiles.forEach(t=>state.board[t.r*COLS+t.c].el.classList.add('highlight-move'));
+			// highlight enemies attackable from current position
+			const enemiesHere = getEnemiesInAttackRange(p, p.r, p.c, /*allowLong*/true);
+			enemiesHere.forEach(e=>state.board[e.r*COLS+e.c].el.classList.add('highlight-attack'));
+			// highlight enemies attackable from each possible move tile
+			for(const t of tiles){
+				const enemiesFrom = getEnemiesInAttackRange(p, t.r, t.c, /*allowLong*/true);
+				enemiesFrom.forEach(e=>state.board[e.r*COLS+e.c].el.classList.add('highlight-attack'));
+			}
+			el.actionDesc.textContent = `Move up to 1 tile and attack with ${mult}x damage - choose piece or target`;
 		} else if(state.dice===6){
 			el.actionDesc.textContent = 'This unit is skipped (rolled 6).';
 		}
@@ -248,7 +257,12 @@ function onRoll(){
 	const r = rollDice(); state.dice = r; el.diceResult.textContent = r; log(`Player ${state.currentPlayer} rolled ${r}`);
 	if(r===6){ log('Unlucky! Turn skipped.'); endTurn(); return; }
 	// player must now select a piece to act
-	el.actionDesc.textContent = (r>=1 && r<=3)?`Select a piece to move up to ${r}`: `Select a piece to attack (x${r===4?2:3})`;
+	if(r>=1 && r<=3){
+		el.actionDesc.textContent = `Select a piece to move up to ${r}`;
+	} else if(r===4 || r===5){
+		const mult = r===4?2:3;
+		el.actionDesc.textContent = `Select a piece to move up to 1 and attack (x${mult})`;
+	}
 }
 
 function checkWin(){

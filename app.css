@@ -17,8 +17,8 @@ main{display:flex;gap:12px}
 .p-king{background:goldenrod;color:#111}
 .p1{box-shadow:inset 0 -6px rgba(0,0,0,0.12)}
 .p2{box-shadow:inset 0 -6px rgba(0,0,0,0.12)}
-.p1 .piece{background:linear-gradient(180deg,var(--p1),#1f5a57)}
-.p2 .piece{background:linear-gradient(180deg,var(--p2),#7a180c)}
+.piece.p1{background:linear-gradient(180deg,var(--p1),#1f5a57)}
+.piece.p2{background:linear-gradient(180deg,var(--p2),#7a180c)}
 .hp{font-size:12px;margin-top:2px}
 #sidebar{width:320px}
 #sidebar h2{margin:6px 0}
