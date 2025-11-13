@@ -20,16 +20,28 @@
 			<aside id="sidebar">
 				<div id="setup">
 					<h2>Setup</h2>
-					<div id="setup-instructions">Select 5 pieces (king required) then place them in your back two rows.</div>
+					<div id="setup-instructions">Each player: select 4 fighters (king is required). Then place them in your back two rows.</div>
 					<div id="roster">
-						<label><input type="checkbox" id="p-king" checked disabled/> King (10 HP) - required</label>
-						<label><input type="checkbox" class="p-choice" value="gunslinger" /> Gunslinger (7 HP)</label>
-						<label><input type="checkbox" class="p-choice" value="gunslinger" /> Gunslinger (7 HP)</label>
-						<label><input type="checkbox" class="p-choice" value="gunslinger" /> Gunslinger (7 HP)</label>
-						<label><input type="checkbox" class="p-choice" value="bruiser" /> Bruiser (8 HP)</label>
-						<label><input type="checkbox" class="p-choice" value="bruiser" /> Bruiser (8 HP)</label>
+						<div class="roster-column">
+							<h3>Player 1</h3>
+							<label><input type="checkbox" id="p1-king" checked disabled/> King (10 HP) - required</label>
+							<label><input type="checkbox" class="p-choice-p1" value="gunslinger" /> Gunslinger (7 HP)</label>
+							<label><input type="checkbox" class="p-choice-p1" value="gunslinger" /> Gunslinger (7 HP)</label>
+							<label><input type="checkbox" class="p-choice-p1" value="gunslinger" /> Gunslinger (7 HP)</label>
+							<label><input type="checkbox" class="p-choice-p1" value="bruiser" /> Bruiser (8 HP)</label>
+							<label><input type="checkbox" class="p-choice-p1" value="bruiser" /> Bruiser (8 HP)</label>
+						</div>
+						<div class="roster-column">
+							<h3>Player 2</h3>
+							<label><input type="checkbox" id="p2-king" checked disabled/> King (10 HP) - required</label>
+							<label><input type="checkbox" class="p-choice-p2" value="gunslinger" /> Gunslinger (7 HP)</label>
+							<label><input type="checkbox" class="p-choice-p2" value="gunslinger" /> Gunslinger (7 HP)</label>
+							<label><input type="checkbox" class="p-choice-p2" value="gunslinger" /> Gunslinger (7 HP)</label>
+							<label><input type="checkbox" class="p-choice-p2" value="bruiser" /> Bruiser (8 HP)</label>
+							<label><input type="checkbox" class="p-choice-p2" value="bruiser" /> Bruiser (8 HP)</label>
+						</div>
 					</div>
-					<button id="start-btn">Start Game (Player 1)</button>
+					<button id="start-btn">Begin Placement</button>
 				</div>
 
 				<div id="turn-banner" class="turn-banner hidden">

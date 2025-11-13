@@ -119,18 +119,16 @@ function findPieceById(id){
 
 function onCellClick(r,c){
 	if(state.phase === 'placement' && state.awaitingPlacement>0){
-		// only allow placing in appropriate rows for player 1 during setup
-		const owner = 1;
-		const validRows = [4,5];
+		// placing for current placementOwner (1 or 2)
+		const owner = state.placementOwner || 1;
+		const validRows = owner===1 ? [4,5] : [0,1];
 		if(!validRows.includes(r)){ log('Choose a tile in your back two rows'); return; }
-		// if occupied
 		if(getPieceAt(r,c)){ log('Tile occupied'); return; }
-		// place next piece from pendingPlacement array
 		const pending = state.pendingPlacement.shift();
 		placePiece(owner, pending, r, c, pending==='king');
 		state.awaitingPlacement--;
 		if(state.awaitingPlacement===0){
-			finishPlayer1Placement();
+			handlePlacementComplete();
 		} else {
 			log(`Placed ${pending}. ${state.awaitingPlacement} left to place.`);
 		}
@@ -415,39 +413,41 @@ function checkWin(){
 function startPlacement(){
 	state.phase='placement';
 	// read selected choices
-	const choices = Array.from(document.querySelectorAll('.p-choice')).filter(i=>i.checked).map(i=>i.value);
-	if(choices.length!==4){
-		alert('Please select exactly 4 additional pieces (plus the king makes 5).');
+	const choices1 = Array.from(document.querySelectorAll('.p-choice-p1')).filter(i=>i.checked).map(i=>i.value);
+	const choices2 = Array.from(document.querySelectorAll('.p-choice-p2')).filter(i=>i.checked).map(i=>i.value);
+	if(choices1.length!==4 || choices2.length!==4){
+		alert('Each player must select exactly 4 additional pieces (plus the king makes 5).');
 		return;
 	}
 	el.startBtn.disabled = true;
 	el.boardArea.classList.remove('hidden-board');
-	// prepare pending placement: include king forced first? We auto-place king at bottom-left
-	state.pendingPlacement = [...choices];
-	state.awaitingPlacement = choices.length;
+	// store both rosters and prepare pending placement for Player 1
+	state.roster1 = [...choices1];
+	state.roster2 = [...choices2];
+	state.pendingPlacement = [...state.roster1];
+	state.awaitingPlacement = state.pendingPlacement.length;
+	state.placementOwner = 1;
 	// place player1 king at bottom-left (row5,col0)
 	placePiece(1,'king',5,0,true);
-	log('Player 1 king placed at (5,0). Place remaining pieces by clicking your back two rows (rows 4-5).');
+	log('Player 1 king placed at (5,0). Player 1: place remaining pieces by clicking your back two rows (rows 4-5).');
 	el.startBtn.disabled = true; el.startBtn.textContent='Placing...';
 }
 
-function finishPlayer1Placement(){
-	// auto-place player2 mirrored roster: king at (0,5), others random in rows 0-1
-	placePiece(2,'king',0,5,true);
-	// copy pendingPlacement originally chosen
-	const roster = [];
-	document.querySelectorAll('.p-choice').forEach(i=>{ if(i.checked) roster.push(i.value); });
-	const spots = [];
-	for(let r=0;r<=1;r++) for(let c=0;c<COLS;c++) spots.push({r,c});
-	// remove occupied
-	const free = spots.filter(s=>!getPieceAt(s.r,s.c));
-	// shuffle and assign
-	shuffleArray(free);
-	for(let i=0;i<roster.length;i++){
-		const s = free[i]; if(!s) break; placePiece(2, roster[i], s.r, s.c, roster[i]==='king');
+function handlePlacementComplete(){
+	// If player 1 just finished, switch to player 2 placement
+	if(!state.placementOwner || state.placementOwner===1){
+		state.placementOwner = 2;
+		// place player2 king at top-right (0,5)
+		placePiece(2,'king',0,5,true);
+		// refill pendingPlacement for player 2 using roster2
+		state.pendingPlacement = [...(state.roster2||[])];
+		state.awaitingPlacement = state.pendingPlacement.length;
+		log('Player 2 king placed at (0,5). Player 2: place your remaining pieces by clicking rows 0-1.');
+		return;
 	}
-	log('Player 2 auto-placed their roster (king at 0,5).');
-	// decide who starts by dice after confirming ready
+
+	// both players finished placement
+	log('Both players placed. Ready to begin.');
 	showReadyMessage(decideFirstPlayer);
 }
 
