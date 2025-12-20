@@ -1,162 +1,136 @@
-// Easy AI for Kings of the West
+// Easy AI for Kings of the West (Simplified perception for easier play)
 // Exposes EasyAI.chooseAction(state, player)
 
-var EasyAI = (function(){
-    function cloneState(s){
-        // FIX: Do not JSON.stringify the whole 's' (state) because s.board 
-        // contains DOM elements, which causes a Circular Reference crash.
-        // We only need players, dice, current player, and phase.
-        return {
-            players: JSON.parse(JSON.stringify(s.players)),
-            currentPlayer: s.currentPlayer,
-            dice: s.dice,
-            phase: s.phase
-            // We ignore s.board and s.attackTargets here
-        };
-    }
+const EasyAI = (() => {
+    const BOARD_ROWS = 6;
+    const BOARD_COLS = 6;
+    const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 
-    function getPieceAt(state, r, c){
-        // Note: This function relies on state.players, not state.board
-        for(const pl of [1,2]){
-            for(const p of state.players[pl].pieces){
-                if(p.r===r && p.c===c && p.hp>0) return p;
+    const getOpponent = (player) => (player === 1 ? 2 : 1);
+
+    function getPieceAt(state, r, c) {
+        for (const pl of [1, 2]) {
+            for (const p of state.players[pl].pieces) {
+                if (p.r === r && p.c === c && p.hp > 0) return p;
             }
         }
         return null;
     }
 
-    function manhattan(a,b){ return Math.abs(a.r-b.r)+Math.abs(a.c-b.c); }
-
-    function getReachable(state, p, steps){
-        const ROWS = 6, COLS = 6;
-        const q=[{r:p.r,c:p.c,dist:0}];
-        const seen = new Set([p.r+','+p.c]);
+    // Determines all reachable tiles for a piece within a given number of steps
+    function getReachable(state, startPiece, steps) {
+        const queue = [{ r: startPiece.r, c: startPiece.c, dist: 0 }];
+        const seen = new Set([`${startPiece.r},${startPiece.c}`]);
         const reachable = [];
-        while(q.length){
-            const cur = q.shift();
-            const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
-            for(const d of dirs){
-                const nr = cur.r + d[0], nc = cur.c + d[1];
-                if(nr<0||nr>=ROWS||nc<0||nc>=COLS) continue;
-                const key = nr+','+nc;
-                if(seen.has(key)) continue;
-                if(getPieceAt(state,nr,nc)) { seen.add(key); continue; }
-                const nd = cur.dist+1;
-                if(nd>steps) { seen.add(key); continue; }
-                reachable.push({r:nr,c:nc});
+
+        while (queue.length) {
+            const { r, c, dist } = queue.shift();
+
+            for (const [dr, dc] of DIRS) {
+                const nr = r + dr;
+                const nc = c + dc;
+                const key = `${nr},${nc}`;
+
+                if (nr < 0 || nr >= BOARD_ROWS || nc < 0 || nc >= BOARD_COLS) continue;
+                if (seen.has(key) || getPieceAt(state, nr, nc)) {
+                    seen.add(key); // Still mark as seen even if blocked, to prevent revisiting
+                    continue;
+                }
+
+                const newDist = dist + 1;
+                if (newDist > steps) {
+                    seen.add(key);
+                    continue;
+                }
+
+                reachable.push({ r: nr, c: nc });
                 seen.add(key);
-                q.push({r:nr,c:nc,dist:nd});
+                queue.push({ r: nr, c: nc, dist: newDist });
             }
         }
         return reachable;
     }
 
-    function getEnemiesInAttackRange(state, p, fromR, fromC){
-        const opp = p.owner===1?2:1;
+    // Gets enemies in attack range from a given (r, c)
+    function getEnemiesInAttackRange(state, piece, fromR, fromC) {
+        const opp = getOpponent(piece.owner);
         const enemies = [];
-        for(const e of state.players[opp].pieces){
-            if(e.hp<=0) continue;
-            const dist = Math.abs(e.r-fromR)+Math.abs(e.c-fromC);
-            if(p.type==='gunslinger'){
-                if(dist===1) enemies.push({piece:e,dist:dist,damage:3});
-                else if(dist>=2 && dist<=3) enemies.push({piece:e,dist:dist,damage:2});
-            } else {
-                if(dist===1) enemies.push({piece:e,dist:dist,damage:3});
+        for (const e of state.players[opp].pieces) {
+            if (e.hp <= 0) continue;
+            const dist = Math.abs(e.r - fromR) + Math.abs(e.c - fromC);
+            if (piece.type === 'gunslinger') {
+                if (dist === 1 || (dist >= 2 && dist <= 3)) enemies.push(e);
+            } else { // Melee
+                if (dist === 1) enemies.push(e);
             }
         }
         return enemies;
     }
 
-    function enemyCanAttackTile(state, owner, r,c){
-        // Count how many enemy pieces could attack tile (r,c)
-        const opp = owner===1?2:1;
-        let count = 0;
-        for(const e of state.players[opp].pieces){
-            if(e.hp<=0) continue;
-            const dist = Math.abs(e.r-r)+Math.abs(e.c-c);
-            if(e.type==='gunslinger'){
-                if(dist===1 || (dist>=2 && dist<=3)) count++;
-            } else {
-                if(dist===1) count++;
-            }
-        }
-        return count;
-    }
-
-    function evaluateAction(state, piece, moveTo, attackCandidate, multiplier){
-        // score higher for more damage, prefer captures, prefer safety
-        let score = 0;
-        const fromR = moveTo?moveTo.r:piece.r;
-        const fromC = moveTo?moveTo.c:piece.c;
-        if(attackCandidate){
-            const dist = Math.abs(attackCandidate.r - fromR) + Math.abs(attackCandidate.c - fromC);
-            let base = 0;
-            if(piece.type==='gunslinger') base = (dist===1?3: (dist>=2 && dist<=3?2:0));
-            else base = (dist===1?3:0);
-            const dmg = base * (multiplier||1);
-            score += dmg * 10;
-            // extra if attack would kill
-            if(attackCandidate.hp <= dmg) score += 50;
-        }
-        // safety: penalize positions attackable by enemies
-        const danger = enemyCanAttackTile(state, piece.owner, fromR, fromC);
-        score -= danger * 6;
-        // prefer advancing toward enemy king
-        const oppPieces = state.players[piece.owner===1?2:1].pieces;
-        const kings = oppPieces.filter(x=>x.isKing);
-        if(kings.length){
-            const distToKing = Math.min(...kings.map(k=>Math.abs(k.r-fromR)+Math.abs(k.c-fromC)));
-            score += (10 - distToKing);
-        }
-        // small bias to prefer non-null move (activity)
-        if(moveTo) score += 1;
-        return score;
-    }
-
-    function chooseAction(rawState, player){
-        // returns {pieceId, move:{r,c} or null, attackId or null}
-        const state = cloneState(rawState);
+    // --- Simplified chooseAction for easier AI ---
+    function chooseAction(rawState, player) {
+        const state = rawState; // No need to clone for this simpler AI if we don't modify state
         const dice = state.dice || 0;
-        const mult = (dice===4?2: (dice===5?3:1));
-        let best = {score:-Infinity, action:null};
-        const pieces = state.players[player].pieces.filter(p=>p.hp>0);
-        for(const p of pieces){
-            // immediate attacks from current tile
+        const pieces = state.players[player].pieces.filter(p => p.hp > 0);
+
+        // Determine max steps for movement based on dice
+        let maxStep = 0;
+        if (dice >= 1 && dice <= 3) maxStep = dice;
+        if (dice === 4 || dice === 5) maxStep = 1; // Double or Triple Attack dice usually means 1 step movement
+
+        // Shuffle pieces to add some non-determinism if multiple pieces can act
+        pieces.sort(() => Math.random() - 0.5);
+
+        for (const p of pieces) {
+            // 1. Prioritize any immediate attack from current position
             const enemiesHere = getEnemiesInAttackRange(state, p, p.r, p.c);
-            for(const eObj of enemiesHere){
-                const score = evaluateAction(state, p, null, eObj.piece, mult);
-                if(score>best.score){ best.score=score; best.action = {pieceId:p.id, move:null, attackId:eObj.piece.id}; }
+            if (enemiesHere.length > 0) {
+                // Pick a random enemy to attack
+                const target = enemiesHere[Math.floor(Math.random() * enemiesHere.length)];
+                return { pieceId: p.id, move: null, attackId: target.id };
             }
-            // moves + optional attacks depending on dice
-            let maxStep = 0;
-            if(dice>=1 && dice<=3) maxStep = dice;
-            if(dice===4 || dice===5) maxStep = 1;
-            if(maxStep>0){
-                const tiles = getReachable(state, p, maxStep);
-                // also include staying in place as an option
-                tiles.push(null);
-                for(const t of tiles){
-                    const moveTo = t?{r:t.r,c:t.c}:null;
-                    // find attackable enemies from this position
-                    const enemies = getEnemiesInAttackRange(state, p, moveTo?moveTo.r: p.r, moveTo?moveTo.c: p.c);
-                    if(enemies.length===0){
-                        const score = evaluateAction(state, p, moveTo, null, mult);
-                        if(score>best.score){ best.score=score; best.action={pieceId:p.id, move:moveTo, attackId:null}; }
-                    } else {
-                        for(const eObj of enemies){
-                            const score = evaluateAction(state, p, moveTo, eObj.piece, mult);
-                            if(score>best.score){ best.score=score; best.action={pieceId:p.id, move:moveTo, attackId:eObj.piece.id}; }
-                        }
+
+            // 2. If no immediate attack, try to move and then attack, or just move
+            if (maxStep > 0) {
+                const reachableTiles = getReachable(state, p, maxStep);
+                // Also include staying in place as a "move" option (null)
+                reachableTiles.push(null);
+
+                // Shuffle reachable tiles to introduce randomness in movement
+                reachableTiles.sort(() => Math.random() - 0.5);
+
+                for (const t of reachableTiles) {
+                    const moveTo = t ? { r: t.r, c: t.c } : null;
+                    const fromR = moveTo ? moveTo.r : p.r;
+                    const fromC = moveTo ? moveTo.c : p.c;
+
+                    const enemiesFromMove = getEnemiesInAttackRange(state, p, fromR, fromC);
+                    if (enemiesFromMove.length > 0) {
+                        // If moving leads to an attack, take it. Pick a random enemy.
+                        const target = enemiesFromMove[Math.floor(Math.random() * enemiesFromMove.length)];
+                        return { pieceId: p.id, move: moveTo, attackId: target.id };
                     }
                 }
+
+                // If no attack is possible after moving, just pick a random valid move
+                // (already shuffled reachableTiles, so the first one is effectively random)
+                if (reachableTiles.length > 1) { // If there's at least one move option besides staying put
+                    const randomMove = reachableTiles.find(move => move !== null); // Pick a non-null move if possible
+                     if (randomMove) {
+                        return { pieceId: p.id, move: randomMove, attackId: null };
+                    }
+                }
+                 // If only staying in place is an option, do that (or if no moves were found at all)
+                return { pieceId: p.id, move: null, attackId: null };
             }
         }
-        if(!best.action) return null;
-        return best.action;
+
+        // If no actions can be found for any piece, return null
+        return null;
     }
 
     return { chooseAction };
 })();
 
 // Expose to global
-if(typeof window !== 'undefined') window.EasyAI = EasyAI;
+if (typeof window !== 'undefined') window.EasyAI = EasyAI;
